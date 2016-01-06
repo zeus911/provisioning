@@ -146,6 +146,17 @@ elif  [ ${host_type} == 'kvm' ];then
 	virsh net-destroy default
 	virsh net-undefine default
 	service libvirtd restart
+	
+	#add virtio module
+	modprobe virtio
+	modprobe virtio_blk
+	modprobe virtio_net
+	modprobe virtio_pci
+	modprobe virtio_ring
+	modprobe virtio_scsi
+	modprobe virtio_console
+	modprobe virtio_rng
+	modprobe virtio_balloon
 
 	chkconfig ksm off
 	chkconfig ksmtuned off
