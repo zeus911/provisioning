@@ -1,5 +1,6 @@
-yum install -y http://${http_server}/cobbler/ks_mirror/custom/utils/zabbix-agent-2.4.5.el6.x86_64.rpm
+yum install -y zabbix-agent
 chkconfig zabbix-agent on
 
 #open-falcon agent
-yum install -y http://${http_server}/cobbler/ks_mirror/custom/utils/falcon-agent-1.0-1.x86_64.rpm
+yum install -y falcon-agent
+
