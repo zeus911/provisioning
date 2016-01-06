@@ -50,7 +50,7 @@ chkconfig mysql_master on
 chkconfig mysql_slave on
 
 #MHA node
-yum install -y http://${http_server}/cobbler/ks_mirror/custom/utils/mha4mysql-node-0.56-0.el6.noarch.rpm
+yum install -y mha4mysql-node
 
 #monitor agent
-yum install -y http://${http_server}/cobbler/ks_mirror/custom/utils/falcon-mymon-1.0-1.x86_64.rpm
+yum install -y falcon-mymon

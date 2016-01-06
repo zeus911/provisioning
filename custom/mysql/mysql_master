@@ -1,0 +1,79 @@
+#!/bin/sh -e
+
+### BEGIN INIT INFO
+# Provides:             MySQL Server
+# Required-Start:       $local_fs $remote_fs $network $time
+# Required-Stop:        $local_fs $remote_fs $network $time
+# Should-Start:         $syslog
+# Should-Stop:          $syslog
+# Default-Start:        2 3 4 5
+# Default-Stop:         0 1 6
+# Short-Description:    A fast, light-weight proxy for memcached and redis 
+### END INIT INFO
+
+# chkconfig: 2345 99 01
+
+
+#Installation prefix
+CONF=/etc/my_master.cnf
+
+set -e
+
+test -x $NCMD || exit 0
+
+case $1 in 
+
+  start)
+        echo -n "Starting MySQL Server: "
+        if [ -f $PIDFILE ]; then
+                PID=`cat $PIDFILE`
+                if [ -d /proc/$PID ]; then
+                        echo "Already started"
+                        exit 0  
+                fi
+        fi
+        mysqld_safe --defaults-file="$CONF" 2>&1 &
+        echo "OK"
+        ;;
+  stop)
+        echo -n "Stopping MySQL Server: "
+        if [ -f $PIDFILE ]; then
+                PID=`cat $PIDFILE`
+                if [ -d /proc/$PID ]; then
+                        kill $PID
+                        echo "MySQL Server ($PID) succesfully stopped"
+                        echo "OK"
+                fi
+        else
+                echo "is not running"   
+        fi
+        ;;
+  restart|reload)
+        echo -n "Restarting MySQL Server: "
+        if [ -f $PIDFILE ]; then
+                PID=`cat $PIDFILE`
+                if [ -d /proc/$PID ]; then
+                        kill $PID
+                fi
+        fi
+    mysqld_safe --defaults-file="$CONF" 2>&1 &
+        echo "OK"
+        ;;
+  status)
+        echo -n "Status MySQL Server: "
+        if [ -f $PIDFILE ]; then
+                PID=`cat $PIDFILE`
+                if [ -d /proc/$PID ]; then
+                        echo "is running"
+                fi
+        else
+                echo "is not running"
+        fi
+        ;;
+  *)
+        echo "Usage: $0 {start|stop|restart|reload|status}" 1>&2
+        exit 1
+        ;;
+esac
+
+exit 0
