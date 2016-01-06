@@ -1,0 +1,2 @@
+#tengine
+yum install -y tengine

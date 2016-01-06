@@ -1,0 +1,152 @@
+###ssh config###########
+sed -i 's/#UseDNS yes/UseDNS no/' /etc/ssh/sshd_config
+sed -i 's/^GSSAPIAuthentication yes$/GSSAPIAuthentication no/' /etc/ssh/sshd_config
+sed -i 's/^PasswordAuthentication yes$/PasswordAuthentication no/' /etc/ssh/sshd_config
+
+###disable selinux###
+sed -i 's/SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
+
+###alias rm###
+alias rm='rm --preserve-root --verbose --interactive=once'
+
+###limits config####
+ulimit -HSn 65536  
+echo -ne "  
+* soft nproc 10240
+* hard nproc 10240
+* soft nofile 1048576
+* hard nofile 1048576
+" >>/etc/security/limits.conf
+
+echo -ne "  
+root       soft    nproc   unlimited
+*          soft    nproc   65536
+" >>/etc/security/limits.d/90-nproc.conf
+
+###disable services###
+
+
+#lvm making
+if [ 1 -eq `grep -c cinder /etc/fstab` ]
+then
+yum -y install lvm2
+umount /dev/sda2
+pvcreate /dev/sda2
+vgcreate cinder-volumes /dev/sda2
+sed -i '/cinder-volumes/s/^/#/' /etc/fstab
+fi
+
+#disable iptables
+chkconfig iptables off
+
+#utils
+yum -y install rsyslog wget vim dos2unix dstat git htop iftop iotop tcpdump nmap screen telnet tree supervisor
+chkconfig rsyslog on
+chkconfig supervisord on
+
+#sysctl.conf
+rm -rf /etc/sysctl.conf
+wget http://${http_server}/cobbler/ks_mirror/custom/system/sysctl.conf -P /etc/
+
+#sudoers ops
+echo '%wheel        ALL=(ALL)       NOPASSWD: ALL' >> /etc/sudoers
+useradd ops -g wheel
+
+echo "auth    required        pam_wheel.so use_uid" >> /etc/pam.d/su
+echo "auth    [ignore=1 default=ignore]       pam_wheel.so use_uid debug" >> /etc/pam.d/su
+echo "auth    required        pam_listfile.so item=user sense=deny onerr=succeed file=/etc/sudeny" >> /etc/pam.d/su
+echo "SU_WHEEL_ONLY yes" >> /etc/login.defs
+echo "root" >> /etc/sudeny
+chgrp wheel /bin/su
+chmod 4750 /bin/su
+
+#remove some soft
+yum remove -y qt qt3 gtk2 xorg-x11-font-utils xorg-x11-drv-ati-firmware
+
+#wget some repo
+wget http://${http_server}/cobbler/ks_mirror/custom/company.repo -P /etc/yum.repos.d/
+wget http://${http_server}/cobbler/ks_mirror/custom/custom.repo -P /etc/yum.repos.d/
+
+#disable ipv6
+cat <<EOF>>/etc/modprobe.d/dist.conf
+alias net-pf-10 off
+alias ipv6 off
+EOF
+
+#rsyslog
+wget http://${http_server}/cobbler/ks_mirror/custom/rsyslog.conf -P /etc/
+/etc/init.d/rsyslog restart
+
+#python package
+yum install -y python-gevent python-eventlet python-simplejson python-webpy python-msgpack python-argparse python-confparser python-requests python-pika MySQL-python python-redis python-memcached python-logutils python-billiard protobuf-static protobuf-python
+
+#init docker
+if  [ ${host_type} == 'docker' ];then
+
+	yum install -y lvm2 docker-io vconfig bridge-utils quota
+	
+	#disable docker0 bridge
+	ip link set dev docker0 down
+	brctl delbr docker0
+
+	# create docker vg
+	devs=`for dev in /dev/sd?;do echo $dev;done`
+	pvcreate $devs
+	vgcreate docker-pool $devs
+	vgchange -a y docker-pool
+	# Create Logical Volumes for Docker
+	lvcreate -Zy -n metadata -l 1%VG  docker-pool
+	lvcreate -Wy -n data     -l 49%VG docker-pool
+	lvcreate -Wy -n volumes  -l 50%VG docker-pool
+	mkfs.xfs /dev/docker-pool/volumes
+	echo '/dev/docker-pool/volumes /volumes xfs defaults,data=ordered,nodirtime,noatime,usrquota,grpquota 0 2' >>/etc/fstab
+
+	# enforce insecure registry
+	# Disable Red Hat registry and Docker.io registry, enable private registry
+	echo -ne "  
+	DD_REGISTRY="--add-registry dockerhub.meizu.com"
+	BLOCK_REGISTRY="--block-registry docker.io"
+	INSECURE_REGISTRY="--insecure-registry dockerhub.meizu.com"
+	" >>/etc/sysconfig/docker
+
+	# Use direct LVM instead of loop LVM
+	sed -i /etc/sysconfig/docker-storage \
+	    -e '/DOCKER_STORAGE_OPTIONS=/ c\DOCKER_STORAGE_OPTIONS="--storage-opt dm.datadev=/dev/docker-pool/data --storage-opt dm.metadatadev=/dev/docker-pool/metadata --storage-opt dm.blocksize=512K --storage-opt dm.basesize=20G --storage-opt dm.fs=xfs"'
+
+	#config docker network
+	sed -i /etc/sysconfig/docker-network \
+	    -e '/DOCKER_STORAGE_OPTIONS=/ c\DOCKER_STORAGE_OPTIONS="--insecure-registry dockerhub.meizu.com --iptables=false --bridge=br0 --dns=dns.meizu.com"'
+
+#init kvm
+elif  [ ${host_type} == 'kvm' ];then
+
+	yum -y install libvirt qemu-kvm qemu-kvm-tools qemu-guest-agent python-virtinst libssh2 libguestfs-tools bridge-utils guestfish uml-utilies vconfig lvm2 quota
+
+	# create datavg vm_storage_pool_vg vg
+	devs=`for dev in /dev/sd?;do echo $dev;done`
+	pvcreate $devs
+	vgcreate vm_storage_pool_vg $devs
+	vgchange -a y vm_storage_pool_vg
+
+	PE=`vgdisplay vm_storage_pool_vg |grep "Total PE"|awk '{print $3}'`
+	lvcreate -n vm_storage -l $PE vm_storage_pool_vg
+	mkfs.xfs /dev/vm_storage_pool_vg/vm_storage
+	mkdir /vm_storage
+	chown qemu:qemu /vm_storage/
+	chmod 700 /vm_storage
+	mount -t xfs /dev/vm_storage_pool_vg/vm_storage /vm_storage
+	echo "/dev/vm_storage_pool_vg/vm_storage /vm_storage xfs    defaults,data=ordered,nodirtime,noatime,usrquota,grpquota    1 2" >> /etc/fstab
+	virsh pool-define-as storage_pool --type dir --target /vm_storage
+	virsh pool-info storage_pool
+	virsh pool-start storage_pool
+	virsh pool-autostart storage_pool
+
+	#disable virbr0
+	virsh net-list
+	virsh net-destroy default
+	virsh net-undefine default
+	service libvirtd restart
+
+	chkconfig ksm off
+	chkconfig ksmtuned off
+fi

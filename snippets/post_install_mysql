@@ -1,0 +1,56 @@
+#mysql install
+yum install -y Percona-Server-client-56 Percona-Server-server-56 Percona-Server-tokudb-56 percona-agent percona-playback percona-toolkit percona-xtrabackup
+yum install -y MySQL-python
+
+echo never>/sys/kernel/mm/transparent_hugepage/enabled
+echo never>/sys/kernel/mm/transparent_hugepage/defrag
+echo '16' > /sys/block/sda/queue/read_ahead_kb
+echo '512' > /sys/block/sda/queue/nr_requests 
+echo 'deadline' > /sys/block/sda/queue/scheduler
+
+
+#master
+#copy init file
+wget http://${http_server}/cobbler/ks_mirror/custom/mysql/my_master.cnf -P /etc/
+wget http://${http_server}/cobbler/ks_mirror/custom/mysql/mysql_master -P /etc/init.d/
+chmod a+x /etc/init.d/mysql_master
+
+[ !-d $PIDFILE ] && mkdir -p /data/logs && chmod -R 777 /data/logs
+mkdir -p /data/mysql_log/master/{innodb_data_home,innodb_log_arch,innodb_log_group,innodb_undo,mysql-bin,relay-log,tokudb_data,tokudb_log,tokudb_tmp}
+chown -R mysql:mysql /data/mysql_log
+#modify password & datadir & my.cnf
+mysql_install_db --user=mysql --defaults-file=/etc/my_master.cnf --explicit_defaults_for_timestamp
+/etc/init.d/mysql_master start
+sleep 30
+mysqladmin -uroot password 'jGJ7Ojnc.ARD2qxShCsx' -S /tmp/mysql_master.sock
+ps_tokudb_admin --enable -S /tmp/mysql_master.sock -uroot -pjGJ7Ojnc.ARD2qxShCsx
+#mysql -S /tmp/mysql_master.sock -uroot -pjGJ7Ojnc.ARD2qxShCsx -e "install plugin handlersocket soname 'handlersocket.so'"
+mysql -S /tmp/mysql_master.sock -uroot -pjGJ7Ojnc.ARD2qxShCsx -e "install plugin rpl_semi_sync_master soname 'semisync_master.so'"
+mysql -S /tmp/mysql_master.sock -uroot -pjGJ7Ojnc.ARD2qxShCsx -e "install plugin rpl_semi_sync_slave soname 'semisync_slave.so'"
+
+#slave
+wget http://${http_server}/cobbler/ks_mirror/custom/mysql/my_slave.cnf -P /etc/
+wget http://${http_server}/cobbler/ks_mirror/custom/mysql/mysql_slave -P /etc/init.d/
+chmod a+x /etc/init.d/mysql_slave
+[ !-d $PIDFILE ] && mkdir -p /data/logs && chmod -R 777 /data/logs
+mkdir -p /data/mysql_log/slave/{innodb_data_home,innodb_log_arch,innodb_log_group,innodb_undo,mysql-bin,relay-log,tokudb_data,tokudb_log,tokudb_tmp}
+chown -R mysql:mysql /data/mysql_log
+#modify password & datadir & my.cnf
+mysql_install_db --user=mysql --defaults-file=/etc/my_slave.cnf --explicit_defaults_for_timestamp
+/etc/init.d/mysql_slave start
+sleep 30
+mysqladmin -uroot password 'jGJ7Ojnc.ARD2qxShCsx' -S /tmp/mysql_slave.sock
+ps_tokudb_admin --enable -S /tmp/mysql_slave.sock -uroot -pjGJ7Ojnc.ARD2qxShCsx
+sleep 10
+#mysql -S /tmp/mysql_slave.sock -uroot -pjGJ7Ojnc.ARD2qxShCsx -e "install plugin handlersocket soname 'handlersocket.so'"
+mysql -S /tmp/mysql_slave.sock -uroot -pjGJ7Ojnc.ARD2qxShCsx -e "install plugin rpl_semi_sync_master soname 'semisync_master.so'"
+mysql -S /tmp/mysql_slave.sock -uroot -pjGJ7Ojnc.ARD2qxShCsx -e "install plugin rpl_semi_sync_slave soname 'semisync_slave.so'"
+
+chkconfig mysql_master on
+chkconfig mysql_slave on
+
+#MHA node
+yum install -y http://${http_server}/cobbler/ks_mirror/custom/utils/mha4mysql-node-0.56-0.el6.noarch.rpm
+
+#monitor agent
+yum install -y http://${http_server}/cobbler/ks_mirror/custom/utils/falcon-mymon-1.0-1.x86_64.rpm
