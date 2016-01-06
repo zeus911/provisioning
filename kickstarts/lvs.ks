@@ -99,6 +99,9 @@ $SNIPPET('post_install_ali_kernel')
 #lvs
 $SNIPPET('post_install_lvs')
 
+#bonding
+#$SNIPPET('post_bond')
+
 #affinity
 $SNIPPET('set_affinity')
 

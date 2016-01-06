@@ -100,6 +100,9 @@ $SNIPPET('set_affinity')
 #use ali_kernel & load toa module
 #$SNIPPET('post_install_ali_kernel')
 
+#bonding
+$SNIPPET('post_bond')
+
 # Start final steps
 $SNIPPET('publickey_root_robin')
 $SNIPPET('kickstart_done')
