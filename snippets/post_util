@@ -78,12 +78,12 @@ wget http://${http_server}/cobbler/ks_mirror/custom/rsyslog.conf -P /etc/
 /etc/init.d/rsyslog restart
 
 #python package
-yum install -y python-gevent python-eventlet python-simplejson python-webpy python-msgpack python-argparse python-confparser python-requests python-pika MySQL-python python-redis python-memcached python-logutils python-billiard protobuf-static protobuf-python
+yum install -y python-gevent python-eventlet python-simplejson python-webpy python-msgpack python-argparse python-confparser python-requests python-pika MySQL-python python-redis python-memcached python-logutils python-billiard
 
 #init docker
 if  [ ${host_type} == 'docker' ];then
 
-	yum install -y lvm2 docker-io vconfig bridge-utils quota
+	yum install -y lvm2 docker-io vconfig bridge-utils quota python-docker-py
 	
 	#disable docker0 bridge
 	ip link set dev docker0 down
@@ -158,6 +158,11 @@ elif  [ ${host_type} == 'kvm' ];then
 	modprobe virtio_rng
 	modprobe virtio_balloon
 
+	#ksm disable
 	chkconfig ksm off
 	chkconfig ksmtuned off
+	
+	#hugepages on
+	mount -t hugetlbfs hugetlbfs /dev/hugepages
+	sysctl vm.nr_hugepages=516
 fi
