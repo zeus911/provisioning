@@ -111,7 +111,7 @@ if  [ ${host_type} == 'docker' ];then
 
 	# Use direct LVM instead of loop LVM
 	sed -i /etc/sysconfig/docker-storage \
-	    -e '/DOCKER_STORAGE_OPTIONS=/ c\DOCKER_STORAGE_OPTIONS="--storage-opt dm.datadev=/dev/docker-pool/data --storage-opt dm.metadatadev=/dev/docker-pool/metadata --storage-opt dm.blocksize=512K --storage-opt dm.basesize=20G --storage-opt dm.fs=xfs"'
+	    -e '/DOCKER_STORAGE_OPTIONS=/ c\DOCKER_STORAGE_OPTIONS=" --storage-opt dm.mountopt=nodiscard --storage-opt dm.blkdiscard=false --storage-opt dm.datadev=/dev/docker-pool/data --storage-opt dm.metadatadev=/dev/docker-pool/metadata --storage-opt dm.blocksize=512K --storage-opt dm.basesize=20G --storage-opt dm.fs=xfs"'
 
 	#config docker network
 	sed -i /etc/sysconfig/docker-network \
